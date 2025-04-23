@@ -33,6 +33,39 @@ const regions = [
   ]}
 ];
 
+const TEAM_NAME_FIXES = {
+  "UConn" : "Connecticut",
+  "Iowa State" : "Iowa St.",
+  "Ole Miss" : "Mississippi",
+  "Michigan State" : "Michigan St.",
+  "Mississippi State" : "Mississippi St.",
+  "Norfolk State" : "Norfolk St.",
+  "Omaha" : "Nebraska Omaha",
+  "SIUE" : "SIU Edwardsville",
+  "McNeese" : "McNeese St.",
+  "Utah State" : "Utah St."
+}
+
+const normalizeTeamName = (name) => TEAM_NAME_FIXES[name] || name;
+
+const predictMatchup = async (team1, team2) => {
+  const fixedTeam1 = normalizeTeamName(team1);
+  const fixedTeam2 = normalizeTeamName(team2);
+
+  try {
+    const res = await fetch("http://127.0.0.1:8000/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team1: fixedTeam1, team2: fixedTeam2 }),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Prediction failed", err);
+    return null;
+  }
+};
+
 
 export default function Bracket() {
   const [selections, setSelections] = useState({});
@@ -56,9 +89,9 @@ export default function Bracket() {
   // Teams for Final Four
 const getFinalFourTeams = (idx) => {
   if (idx === 0) {
-    return [selections["2-3-0"], selections["0-3-0"]].filter(Boolean);
+    return [selections["0-3-0"], selections["1-3-0"]].filter(Boolean);
   } else {
-    return [selections["3-3-0"], selections["1-3-0"]].filter(Boolean);
+    return [selections["2-3-0"], selections["3-3-0"]].filter(Boolean);
   }
 };
 
@@ -97,11 +130,23 @@ const getFinalFourTeams = (idx) => {
               ))}
             </select>
             <button
-                onClick={showPlaceholder}
-                className="ml-2 text-sm bg-gray-200 rounded px-2 py-1"
-              >
-                i
-              </button>
+              onClick={async () => {
+                const teams = getFinalFourTeams(idx);
+                if (teams.length === 2) {
+                  const prediction = await predictMatchup(teams[0], teams[1]);
+                  if (prediction?.winner) {
+                    handleSelect(`finalfour-${idx}`, prediction.winner);
+                  } else {
+                    alert("Prediction failed.");
+                  }
+                } else {
+                  alert("Two teams must be selected to predict.");
+                }
+              }}
+              className="ml-2 px-2 py-1 text-sm bg-blue-200 rounded hover:bg-blue-300"
+            >
+              P
+            </button>
           </div>
         ))}
       </div>
@@ -122,11 +167,24 @@ const getFinalFourTeams = (idx) => {
             ))}
           </select>
           <button
-              onClick={showPlaceholder}
-              className="ml-2 text-sm bg-gray-200 rounded px-2 py-1"
-            >
-              i
-            </button>
+            onClick={async () => {
+              const teams = getChampionshipTeams();
+              if (teams.length === 2) {
+                const prediction = await predictMatchup(teams[0], teams[1]);
+                if (prediction?.winner) {
+                  handleSelect("champion", prediction.winner);
+                } else {
+                  alert("Prediction failed.");
+                }
+              } else {
+                alert("Two teams must be selected to predict.");
+              }
+            }}
+            className="ml-2 px-2 py-1 text-sm bg-blue-200 rounded hover:bg-blue-300"
+          >
+            P
+          </button>
+
         </div>
         {/* Dynamically loaded Champion Logo */}
         {selections["champion"] && (
@@ -211,15 +269,33 @@ function RegionSection({ title, regionIdx, generateRounds, selections, onSelect,
                                         <div className={`w-40 h-10 border rounded shadow flex items-center`}>
                                             {/* Elements on the LEFT */}
                                             {!flip && round === 0 && ( <span className="w-8 font-semibold text-center text-xs whitespace-pre-line leading-tight mr-1">{SEED_ORDER[idx * 2]}</span> )}
-                                            {flip && ( <button type="button" onClick={showPlaceholder} className="px-1 py-0.5 text-xs bg-gray-200 rounded hover:bg-gray-300 mr-1">i</button> )}
+                                            
                                             {/* Select (Middle) */}
                                             <select className="flex-1 h-full text-center text-sm appearance-none bg-white border-none" value={selections[m.id] || ''} onChange={(e) => onSelect(m.id, e.target.value)}>
                                                 <option disabled value="" className="text-gray-500">{m.teams[0] || 'TBD'} | {m.teams[1] || 'TBD'}</option>
                                                 {m.teams[0] && <option value={m.teams[0]}>{m.teams[0]}</option>}
                                                 {m.teams[1] && <option value={m.teams[1]}>{m.teams[1]}</option>}
                                             </select>
+                                            <button
+                                              type="button"
+                                              onClick={async () => {
+                                                const [team1, team2] = m.teams;
+                                                if (team1 && team2) {
+                                                  const prediction = await predictMatchup(team1, team2);
+                                                  if (prediction?.winner) {
+                                                    onSelect(m.id, prediction.winner);
+                                                  } else {
+                                                    alert("Prediction failed. Check backend.");
+                                                  }
+                                                }
+                                              }}
+                                              className="ml-2 px-2 py-0.5 text-xs bg-blue-200 rounded hover:bg-blue-300"
+                                            >
+                                              P
+                                            </button>
+
                                             {/* Elements on the RIGHT */}
-                                            {!flip && ( <button type="button" onClick={showPlaceholder} className="px-1 py-0.5 text-xs bg-gray-200 rounded hover:bg-gray-300 ml-1">i</button> )}
+                                            
                                             {flip && round === 0 && ( <span className="w-8 font-semibold text-center text-xs whitespace-pre-line leading-tight ml-1">{SEED_ORDER[idx * 2]}</span> )}
                                         </div>
                                     </div>
